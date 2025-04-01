@@ -16,6 +16,9 @@ jobs:
   Deploy-cdk:
     runs-on: ubuntu-latest
     steps:
+      - name: add-mask
+        run: |
+          echo "::add-mask::${{ secrets.PRODACCOUNTID }}"
       - uses: actions/checkout@v4
       - name: Use Node.js
         uses: actions/setup-node@v4
