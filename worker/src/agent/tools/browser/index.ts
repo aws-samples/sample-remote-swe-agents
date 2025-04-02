@@ -46,17 +46,29 @@ IMPORTANT:
       ],
     },
   ];
+  let firstCachePoint = 0;
+  let secondCachePoint = 0;
   while (true) {
+    // set cache points
+    secondCachePoint = messages.length - 1;
+    [firstCachePoint, secondCachePoint].forEach((cp) => {
+      const message = messages[cp];
+      if (message?.content) {
+        message.content = [...message.content, { cachePoint: { type: 'default' } }];
+      }
+    });
+
     const res = await pRetry(
       async () => {
         try {
           setKillTimer();
+
           const res = await bedrockConverse(
             // we can use computer_20250124 tool with sonnet 3.7 only!
             ['sonnet3.7'],
             {
               messages,
-              system: [{ text: systemPrompt }],
+              system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
               additionalModelRequestFields: {
                 tools: [
                   {
@@ -112,6 +124,7 @@ IMPORTANT: In the below cases, use computer-use tool instead to visually inspect
                       },
                     },
                   },
+                  { cachePoint: { type: 'default' } },
                 ],
               },
             }
@@ -127,10 +140,19 @@ IMPORTANT: In the below cases, use computer-use tool instead to visually inspect
             throw new AbortError(e);
           }
           throw e;
+        } finally {
         }
       },
       { retries: 10, minTimeout: 3000, maxTimeout: 20000 }
     );
+    // remove cachePoints
+    [firstCachePoint, secondCachePoint].forEach((cp) => {
+      const message = messages[cp];
+      if ('cachePoint' in (message?.content?.at(-1) ?? {})) {
+        message.content!.pop();
+      }
+    });
+    firstCachePoint = secondCachePoint;
 
     console.log(JSON.stringify(res.usage));
     if (res.stopReason == 'tool_use') {
@@ -144,6 +166,7 @@ IMPORTANT: In the below cases, use computer-use tool instead to visually inspect
       if (toolUse == null || toolUseId == null) {
         throw new Error('toolUse is null');
       }
+      console.log(`using tool ${JSON.stringify(toolUse)}`);
       let toolResult = '';
       let screenShot = undefined;
       try {
@@ -323,6 +346,7 @@ IMPORTANT: In the below cases, use computer-use tool instead to visually inspect
   }
 
   const result = `${(messages.at(-1)?.content?.[0] as any)?.text}`;
+  console.log(result);
 
   await screen.close();
   return result;
@@ -348,6 +372,6 @@ IMPORTANT:
 };
 
 // browseWebPage({
-//   url: 'https://github.com/remote-swe-sandbox/remote-swe/issues/59',
-//   query: 'Issueの内容を要約し、実装に必要な情報を抽出してください。',
+//   url: 'https://news.ycombinator.com/news',
+//   query: '最新のニュースをコメント欄も含めて3件要約してください',
 // });

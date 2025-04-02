@@ -9,6 +9,7 @@ import { sendMessage } from '../common/slack';
 import {
   getConversationHistory,
   middleOutFiltering,
+  noOpFiltering,
   saveConversationHistory,
   saveConversationHistoryAtomic,
   updateMessageTokenCount,
@@ -29,7 +30,7 @@ import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 
 export const onMessageReceived = async (workerId: string) => {
-  const { items } = await pRetry(
+  const { items: allItems } = await pRetry(
     async (attemptCount) => {
       const res = await getConversationHistory(workerId);
       const lastItem = res.items.at(-1);
@@ -40,6 +41,7 @@ export const onMessageReceived = async (workerId: string) => {
     },
     { retries: 5, minTimeout: 100, maxTimeout: 2000 }
   );
+  if (!allItems) return;
 
   // Base system prompt
   const baseSystemPrompt = `You are an SWE agent. Help your user using your software development skill. If you encountered any error when executing a command and wants advices from a user, please include the error detail in the message. Always use the same language that user speaks.
@@ -47,7 +49,7 @@ export const onMessageReceived = async (workerId: string) => {
 Here are some information you should know (DO NOT share this information with the user):
 - Your current working directory is ${DefaultWorkingDirectory}
 - You are running on an Amazon EC2 instance. You can get the instance metadata from IMDSv2 endpoint.
-- Current time is ${new Date()}.
+- Today is ${new Date().toDateString()}.
 
 ## Communication Style
 Be brief, clear, and precise. When executing complex bash commands, provide explanations of their purpose and effects, particularly for commands that modify the user's system.
@@ -143,12 +145,31 @@ Users will primarily request software engineering assistance including bug fixes
     tools: [
       ...(await Promise.all(tools.map(async (tool) => ({ toolSpec: await tool.toolSpec() })))),
       ...(await getMcpToolSpecs()),
+      { cachePoint: { type: 'default' } },
     ],
   };
 
+  const { items: initialItems } = await middleOutFiltering(allItems);
+  // usually cache was created with the last assistant message, so try to get at(-2) here.
+  // at(-1) is usually the latest user message received, which is not cached but can also be a good cache point.
+  let firstCachePoint = initialItems.length <= 1 ? initialItems.length - 1 : initialItems.length - 2;
+  let secondCachePoint = 0;
+  const appendedItems: typeof allItems = [];
+
   let lastReportedTime = Date.now() - 300 * 1000;
   while (true) {
-    const { totalTokenCount, messages } = await middleOutFiltering(items);
+    const items = [...initialItems, ...appendedItems];
+    const { totalTokenCount, messages } = await noOpFiltering(items);
+    secondCachePoint = messages.length - 1;
+    [firstCachePoint, secondCachePoint].forEach((cp) => {
+      const message = messages[cp];
+      if (message?.content) {
+        message.content = [...message.content, { cachePoint: { type: 'default' } }];
+      }
+    });
+    console.log(JSON.stringify(messages));
+    firstCachePoint = secondCachePoint;
+
     const res = await pRetry(
       async () => {
         try {
@@ -156,7 +177,7 @@ Users will primarily request software engineering assistance including bug fixes
 
           const res = await bedrockConverse(['sonnet3.7'], {
             messages,
-            system: [{ text: systemPrompt }],
+            system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
             toolConfig,
           });
           return res;
@@ -178,7 +199,7 @@ Users will primarily request software engineering assistance including bug fixes
     const lastItem = items.at(-1);
     if (lastItem?.role == 'user') {
       // this can be negative because reasoningContent is dropped on new turn
-      const tokenCount = (res.usage?.inputTokens ?? 0) - totalTokenCount;
+      const tokenCount = (res.usage?.inputTokens ?? 0) + (res.usage?.cacheReadInputTokens ?? 0) - totalTokenCount;
       await updateMessageTokenCount(workerId, lastItem.SK, tokenCount);
       lastItem.tokenCount = tokenCount;
     }
@@ -280,7 +301,7 @@ Users will primarily request software engineering assistance including bug fixes
         toolResultMessage,
         outputTokenCount
       );
-      items.push(...savedItems);
+      appendedItems.push(...savedItems);
     } else {
       const finalMessage = res.output?.message;
       if (finalMessage?.content == null || finalMessage.content?.length == 0) {

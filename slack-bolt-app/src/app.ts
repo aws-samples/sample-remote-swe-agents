@@ -103,27 +103,48 @@ app.event('app_mention', async ({ event, client, logger }) => {
 
         const tokenSummary = tokenUsage
           .map((item) => {
-            const cost = calculateCost(item.SK, item.inputToken, item.outputToken);
+            const cost = calculateCost(
+              item.SK,
+              item.inputToken,
+              item.outputToken,
+              item.cacheReadInputTokens,
+              item.cacheWriteInputTokens
+            );
             return (
               `Model: ${item.SK}\n` +
               `Input tokens: ${item.inputToken}\n` +
               `Output tokens: ${item.outputToken}\n` +
+              `Cache Read tokens: ${item.cacheReadInputTokens}\n` +
+              `Cache Write tokens: ${item.cacheWriteInputTokens}\n` +
               `Cost: ${cost.toFixed(4)} USD`
             );
           })
           .join('\n\n');
 
         const totalCost = tokenUsage.reduce((acc, item) => {
-          return acc + calculateCost(item.SK, item.inputToken, item.outputToken);
+          return (
+            acc +
+            calculateCost(
+              item.SK,
+              item.inputToken,
+              item.outputToken,
+              item.cacheReadInputTokens,
+              item.cacheWriteInputTokens
+            )
+          );
         }, 0);
 
         const totalInputTokens = tokenUsage.reduce((acc, item) => acc + item.inputToken, 0);
         const totalOutputTokens = tokenUsage.reduce((acc, item) => acc + item.outputToken, 0);
+        const totalCacheReadTokens = tokenUsage.reduce((acc, item) => acc + item.cacheReadInputTokens, 0);
+        const totalCacheWriteTokens = tokenUsage.reduce((acc, item) => acc + item.cacheWriteInputTokens, 0);
 
         const historyText =
           `=== Token Usage Summary ===\n` +
           `Total Input Tokens: ${totalInputTokens}\n` +
           `Total Output Tokens: ${totalOutputTokens}\n` +
+          `Cache Read tokens: ${totalCacheReadTokens}\n` +
+          `Cache Write tokens: ${totalCacheWriteTokens}\n` +
           `Total Cost: ${totalCost.toFixed(4)} USD\n\n` +
           `=== Per Model Breakdown ===\n` +
           `${tokenSummary}\n\n` +

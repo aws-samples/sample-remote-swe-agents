@@ -2,7 +2,7 @@ import { createInterface } from 'readline';
 import { onMessageReceived } from './agent';
 
 const workerId = process.env.WORKER_ID ?? randomBytes(10).toString('hex');
-
+process.env.WORKER_ID = workerId;
 process.env.DISABLE_SLACK = 'true';
 
 const rl = createInterface({

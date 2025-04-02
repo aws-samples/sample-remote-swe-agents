@@ -135,11 +135,11 @@ const trackTokenUsage = async (workerId: string, modelId: string, response: Conv
     return;
   }
 
-  const { inputTokens, outputTokens } = response.usage;
+  const { inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens } = response.usage;
 
   // Retrieve or create item with PK: token-<workerId>, SK: modelId
   try {
-    // Get existing item if available
+    // Get existing item if available (ignoring race condition for brevity)
     const existingItem = await ddb.send(
       new GetCommand({
         TableName,
@@ -159,10 +159,13 @@ const trackTokenUsage = async (workerId: string, modelId: string, response: Conv
             PK: `token-${workerId}`,
             SK: modelId,
           },
-          UpdateExpression: 'ADD inputToken :inputTokens, outputToken :outputTokens',
+          UpdateExpression:
+            'ADD inputToken :inputTokens, outputToken :outputTokens, cacheReadInputTokens :cacheReadInputTokens, cacheWriteInputTokens :cacheWriteInputTokens',
           ExpressionAttributeValues: {
             ':inputTokens': inputTokens || 0,
             ':outputTokens': outputTokens || 0,
+            ':cacheReadInputTokens': cacheReadInputTokens || 0,
+            ':cacheWriteInputTokens': cacheWriteInputTokens || 0,
           },
         })
       );
@@ -176,6 +179,8 @@ const trackTokenUsage = async (workerId: string, modelId: string, response: Conv
             SK: modelId,
             inputToken: inputTokens || 0,
             outputToken: outputTokens || 0,
+            cacheReadInputTokens: cacheReadInputTokens || 0,
+            cacheWriteInputTokens: cacheWriteInputTokens || 0,
           },
         })
       );

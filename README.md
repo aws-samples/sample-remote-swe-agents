@@ -10,7 +10,7 @@ This is an example implementation of a fully autonomous software development AI 
 * Powered by AWS serverless services with minimal maintenance costs
 * No upfront or fixed costs while you don't use the system
 * MCP integration (tool servers)
-* Unlimited context window (middle-out)
+* Efficient token usage with prompt cache and middle-out strategy
 * Reads knowledge from your preferred formats (.clinerules, CLAUDE.md, etc.)
 * Can work on OSS forked repositories!
 

@@ -176,6 +176,11 @@ export const middleOutFiltering = async (items: MessageItem[]) => {
   return { items, totalTokenCount, messages: await itemsToMessages(items) };
 };
 
+export const noOpFiltering = async (items: MessageItem[]) => {
+  let totalTokenCount = items.reduce((sum: number, item) => sum + item.tokenCount, 0);
+  return { items, totalTokenCount, messages: await itemsToMessages(items) };
+};
+
 const itemsToMessages = async (items: MessageItem[]) => {
   return (await Promise.all(
     items.map(async (item: any) => ({
