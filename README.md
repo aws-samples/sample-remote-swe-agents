@@ -118,7 +118,7 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
 
 1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
 2. Generate a new token (classic) with appropriate repository access
-   * Required scopes: `admin:org - read:org, repo, workflow`
+   * Required scopes: `repo, workflow, read:org`
    * The more scopes you permit, the more various tasks agents can perform
 3. Create an SSM Parameter with the generated token string
    ```bash
