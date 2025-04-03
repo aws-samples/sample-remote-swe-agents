@@ -97,13 +97,13 @@ After creating a Slack app, register the secrets in your AWS account by the foll
 aws ssm put-parameter \
     --name /remote-swe/slack/bot-token \
     --value "your-slack-bot-token" \
-    --type String
+    --type String \
     --overwrite
 
 aws ssm put-parameter \
     --name /remote-swe/slack/signing-secret \
     --value "your-slack-signing-secret" \
-    --type String
+    --type String \
     --overwrite
 ```
 
@@ -125,7 +125,7 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
    aws ssm put-parameter \
       --name /remote-swe/github/personal-access-token \
       --value "your-access-token" \
-      --type String
+      --type String \
       --overwrite
    ```
 
