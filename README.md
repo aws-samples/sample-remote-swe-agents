@@ -32,8 +32,8 @@ Please carefully follow all the steps below. If you encounter any issues, we're 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/aws-samples/sample-remote-swe-agents.git
-cd sample-remote-swe-agents
+git clone https://github.com/aws-samples/remote-swe-agents.git
+cd remote-swe-agents
 ```
 
 ### 2. Run CDK Deploy
@@ -78,6 +78,7 @@ Now, you need to set up a Slack App to control agents through the Slack interfac
 3. Choose "From manifest"
 4. Use the provided Slack app manifest YAML file: [manifest.json](./resources/slack-app-manifest.json)
    - Please replace the endpoint URL (`https://redacted.execute-api.us-east-1.amazonaws.com`) with your actual URL
+   - You can find your actual URL in the CDK deployment outputs as `SlackBoltEndpointUrl`
 5. Please make note of the following values:
    - Signing Secret (found in Basic Information)
    - Bot Token (found in OAuth & Permissions, after installing to your workspace)
@@ -97,11 +98,13 @@ aws ssm put-parameter \
     --name /remote-swe/slack/bot-token \
     --value "your-slack-bot-token" \
     --type String
+    --overwrite
 
 aws ssm put-parameter \
     --name /remote-swe/slack/signing-secret \
     --value "your-slack-signing-secret" \
     --type String
+    --overwrite
 ```
 
 Replace `your-slack-bot-token` and `your-slack-signing-secret` with the actual values you obtained in the previous step. The parameters will be referenced from CDK.
@@ -115,7 +118,7 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
 
 1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
 2. Generate a new token (classic) with appropriate repository access
-   * Required scopes: `read:org, repo, workflow`
+   * Required scopes: `admin:org - read:org, repo, workflow`
    * The more scopes you permit, the more various tasks agents can perform
 3. Create an SSM Parameter with the generated token string
    ```bash
@@ -123,6 +126,7 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
       --name /remote-swe/github/personal-access-token \
       --value "your-access-token" \
       --type String
+      --overwrite
    ```
 
 > [!NOTE]
@@ -194,7 +198,7 @@ You can now access all features from Slack. Simply mention the Slack app and sta
 
 When you start an agent, your instruction should include at least the below content:
 
-1. Which GitHib repository should they see
+1. Which GitHub repository should they see
 2. Describe the feature or bug you want to solve
 3. What file should they check first (file path would be the best, but only keywords can also work)
 
