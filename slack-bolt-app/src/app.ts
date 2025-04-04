@@ -32,7 +32,29 @@ const app = new App({
 app.event('app_mention', async ({ event, client, logger }) => {
   console.log('app_mention event received');
   console.log(JSON.stringify(event));
-  const message = event.text.slice(event.text.indexOf('>') + 1).trim();
+  
+  // Check if the mention is at the beginning of the message
+  const mentionEndIndex = event.text.indexOf('>');
+  if (mentionEndIndex <= 0 || !event.text.startsWith('<@')) {
+    await client.chat.postMessage({
+      channel: event.channel,
+      text: `<@${event.user}> メンションは文頭に配置してください（例：@remote-swe-agents こんにちは）`,
+      thread_ts: event.thread_ts ?? event.ts,
+    });
+    return;
+  }
+  
+  const message = event.text.slice(mentionEndIndex + 1).trim();
+  // 空のメッセージの場合もエラーを返す
+  if (!message) {
+    await client.chat.postMessage({
+      channel: event.channel,
+      text: `<@${event.user}> メッセージ内容が空です。メンションの後にメッセージを入力してください。`,
+      thread_ts: event.thread_ts ?? event.ts,
+    });
+    return;
+  }
+  
   const userId = event.user ?? '';
   const channel = event.channel;
   try {
