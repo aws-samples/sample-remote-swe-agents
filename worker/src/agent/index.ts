@@ -213,7 +213,11 @@ Users will primarily request software engineering assistance including bug fixes
     const lastItem = items.at(-1);
     if (lastItem?.role == 'user') {
       // this can be negative because reasoningContent is dropped on new turn
-      const tokenCount = (res.usage?.inputTokens ?? 0) + (res.usage?.cacheReadInputTokens ?? 0) - totalTokenCount;
+      const tokenCount =
+        (res.usage?.inputTokens ?? 0) +
+        (res.usage?.cacheReadInputTokens ?? 0) +
+        (res.usage?.cacheWriteInputTokens ?? 0) -
+        totalTokenCount;
       await updateMessageTokenCount(workerId, lastItem.SK, tokenCount);
       lastItem.tokenCount = tokenCount;
     }
