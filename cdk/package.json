@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.749.0",
-    "aws-cdk-lib": "^2.178.1",
+    "aws-cdk-lib": "^2.189.0",
     "cdk-nag": "^2.35.33",
     "constructs": "^10.0.0"
   }
