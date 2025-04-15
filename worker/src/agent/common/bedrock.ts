@@ -41,17 +41,29 @@ export const bedrockConverse = async (modelTypes: ModelType[], input: Omit<Conve
 const preProcessInput = (input: ConverseCommandInput, modelType: ModelType) => {
   // we cannot use JSON.parse(JSON.stringify(input)) here because input sometimes contains Buffer object for image.
   input = structuredClone(input);
+  let enableReasoning = false;
   if (modelType == 'sonnet3.7') {
+    if (input.toolConfig?.toolChoice != null) {
+      // toolChoice and reasoning cannot be enabled at the same time
+    } else if (
+      input.messages?.at(-2)?.content?.at(0)?.reasoningContent == null &&
+      input.messages?.at(-2)?.content?.at(-1)?.toolUse != null
+    ) {
+      // reasoning cannot be enabled when the last message is toolUse and toolUse does not have reasoning block.
+    } else {
+      enableReasoning = true;
+    }
+  }
+  if (enableReasoning) {
     input.additionalModelRequestFields = {
       reasoning_config: {
         type: 'enabled',
         budget_tokens: 1024,
       },
     };
-  }
-  if (modelType != 'sonnet3.7') {
-    // reasoning is not supported on these models
-    // remove reasoningContent blocks from message contents
+  } else {
+    // when we disable reasoning, we have to remove
+    // reasoningContent blocks from all the previous message contents
     input.messages = input.messages?.map((message) => {
       message.content = message.content?.filter((c) => {
         return !('reasoningContent' in c);

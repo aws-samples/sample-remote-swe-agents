@@ -1,6 +1,5 @@
 import {
   ConverseCommandInput,
-  ConverseRequest,
   Message,
   ThrottlingException,
   ToolResultContentBlock,
@@ -29,6 +28,7 @@ import { getPRCommentsTool, replyPRCommentTool } from './tools/github-pr-comment
 import { readMetadata } from './common/metadata';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
+import { thinkTool } from './tools/think';
 
 export const onMessageReceived = async (workerId: string) => {
   const { items: allItems } = await pRetry(
@@ -50,6 +50,19 @@ Here are some information you should know (DO NOT share this information with th
 - Your current working directory is ${DefaultWorkingDirectory}
 - You are running on an Amazon EC2 instance. You can get the instance metadata from IMDSv2 endpoint.
 - Today is ${new Date().toDateString()}.
+
+## User interface
+Your output text is sent to the user only when 1. using ${reportProgressTool.name} tool or 2. you finished using all tools and end your turn. DO NOT send duplicated messages to the user. For example, if you use ${reportProgressTool.name} tool right before ending your turn, your messages will be highly likely duplicated. In that case, please do not generate any content as the final output.
+
+You should periodically report your progress to avoid from confusing the user. Any tool results might contain a prompt to let you know that more than 5 minutes have passed since the last time you sent a message. If you get the prompt, you should report some progress message using this tool.
+
+- Only use ${reportProgressTool.name} during multi-step tasks that take >30 seconds to complete
+- Use this tool exclusively for progress updates during long-running operations
+- Never use ${reportProgressTool.name} for greetings, acknowledgments, or simple responses
+- Reserve this tool for sharing interim results or status updates when executing complex commands
+- For simple responses: reply directly without tools
+- For internal reasoning: use think tool
+- For progress during lengthy operations: use ${reportProgressTool.name}
 
 ## Communication Style
 Be brief, clear, and precise. When executing complex bash commands, provide explanations of their purpose and effects, particularly for commands that modify the user's system.
@@ -148,6 +161,7 @@ Users will primarily request software engineering assistance including bug fixes
     cloneRepositoryTool,
     commandExecutionTool,
     reportProgressTool,
+    thinkTool,
     fileEditTool,
     webBrowserTool,
     sendImageTool,
@@ -161,6 +175,16 @@ Users will primarily request software engineering assistance including bug fixes
       { cachePoint: { type: 'default' } },
     ],
   };
+  const forcedReportToolConfig: typeof toolConfig = {
+    tools: [
+      ...(await Promise.all(
+        [thinkTool, reportProgressTool].map(async (tool) => ({ toolSpec: await tool.toolSpec() }))
+      )),
+    ],
+    toolChoice: {
+      any: {},
+    },
+  };
 
   const { items: initialItems } = await middleOutFiltering(allItems);
   // usually cache was created with the last user message, so try to get at(-3) here.
@@ -169,7 +193,7 @@ Users will primarily request software engineering assistance including bug fixes
   let secondCachePoint = 0;
   const appendedItems: typeof allItems = [];
 
-  let lastReportedTime = Date.now() - 300 * 1000;
+  let lastReportedTime = 0;
   while (true) {
     const items = [...initialItems, ...appendedItems];
     const { totalTokenCount, messages } = await noOpFiltering(items);
@@ -182,6 +206,9 @@ Users will primarily request software engineering assistance including bug fixes
     });
     firstCachePoint = secondCachePoint;
 
+    const forceReport = Date.now() - lastReportedTime > 300 * 1000;
+    if (lastReportedTime == 0) lastReportedTime = Date.now();
+
     const res = await pRetry(
       async () => {
         try {
@@ -190,7 +217,7 @@ Users will primarily request software engineering assistance including bug fixes
           const res = await bedrockConverse(['sonnet3.7'], {
             messages,
             system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
-            toolConfig,
+            toolConfig: forceReport ? forcedReportToolConfig : toolConfig,
           });
           return res;
         } catch (e) {
@@ -210,7 +237,7 @@ Users will primarily request software engineering assistance including bug fixes
 
     const lastItem = items.at(-1);
     if (lastItem?.role == 'user') {
-      // this can be negative because reasoningContent is dropped on new turn
+      // this can be negative because reasoningContent is dropped on a new turn
       const tokenCount =
         (res.usage?.inputTokens ?? 0) +
         (res.usage?.cacheReadInputTokens ?? 0) +
@@ -281,7 +308,7 @@ Users will primarily request software engineering assistance including bug fixes
         }
 
         if (name == reportProgressTool.name) {
-          lastReportedTime = Date.now(); // reset timer
+          lastReportedTime = Date.now();
         }
         if (name == cloneRepositoryTool.name) {
           // now that repository is determined, we try to update the system prompt
@@ -292,7 +319,6 @@ Users will primarily request software engineering assistance including bug fixes
         toolResult = `Error occurred when using tool ${toolUse.name}: ${(e as any).message}`;
       }
 
-      toolResult += `\nElapsed time since the last message to the user: ${Math.round((Date.now() - lastReportedTime) / 1000)} seconds.`;
       const toolResultMessage: Message = {
         role: 'user' as const,
         content: [
