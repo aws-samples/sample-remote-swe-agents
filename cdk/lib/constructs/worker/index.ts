@@ -91,7 +91,9 @@ export class Worker extends Construct {
     });
 
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+      machineImage: ec2.MachineImage.fromSsmParameter(
+        '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+      ),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
       blockDevices: [
         {
@@ -113,38 +115,37 @@ export class Worker extends Construct {
 
     userData.addCommands(`
 export AWS_REGION=${Stack.of(this).region}
-while true; do
-  # this sometimes fails. so retry. https://github.com/amazonlinux/amazon-linux-2023/issues/397#issuecomment-1760177301
-  dnf install -y nodejs20 docker git python3.12 python3.12-pip 'dnf-command(config-manager)' && break
-done
-ln -s -f /usr/bin/node-20 /usr/bin/node
-ln -s -f /usr/bin/npm-20 /usr/bin/npm
-ln -s -f /usr/bin/npx-20 /usr/bin/npx
-ln -s -f /usr/bin/python3.12 /usr/bin/python
-ln -s -f /usr/bin/pip3.12 /usr/bin/pip
-service docker start
-usermod -a -G docker ec2-user
+
+# Install Node.js https://github.com/nodesource/distributions
+curl -fsSL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
+bash nodesource_setup.sh
+
+apt install -y nodejs docker.io python3-pip
+ln -s -f /usr/bin/pip3 /usr/bin/pip
+ln -s -f /usr/bin/python3 /usr/bin/pip
+
+# Install AWS CLI
+snap install aws-cli --classic
 
 # Install Fluent Bit
 curl https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh
 
-# https://github.com/cli/cli/blob/trunk/docs/install_linux.md#dnf4
-dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-while true; do
-  dnf install -y gh --repo gh-cli && break
-done
+# https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+(type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+  && sudo mkdir -p -m 755 /etc/apt/keyrings \
+  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+  && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && sudo apt update \
+  && sudo apt install gh -y
 
-# https://github.com/amazonlinux/amazon-linux-2023/discussions/417#discussioncomment-8246163
-while true; do
-  dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm && break
-done
-
-# Configure Git user for ec2-user
-sudo -u ec2-user bash -c 'git config --global user.name "remote-swe-app[bot]"'
-sudo -u ec2-user bash -c 'git config --global user.email "${props.gitHubApp?.appId ?? '123456'}+remote-swe-app[bot]@users.noreply.github.com"'
+# Configure Git user for ubuntu
+sudo -u ubuntu bash -c 'git config --global user.name "remote-swe-app[bot]"'
+sudo -u ubuntu bash -c 'git config --global user.email "${props.gitHubApp?.appId ?? '123456'}+remote-swe-app[bot]@users.noreply.github.com"'
 
 # install uv
-sudo -u ec2-user bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+sudo -u ubuntu bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
 `);
 
     if (privateKey) {
@@ -169,7 +170,7 @@ SLACK_BOT_TOKEN=$(aws ssm get-parameter --name ${props.slackBotTokenParameter.pa
 GITHUB_PERSONAL_ACCESS_TOKEN=${props.githubPersonalAccessTokenParameter ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --query \"Parameter.Value\" --output text)` : '""'}
 
 mkdir -p /opt/myapp && cd /opt/myapp
-chown -R ec2-user:ec2-user /opt/myapp
+chown -R ubuntu:ubuntu /opt/myapp
 
 cat << EOF > /etc/systemd/system/myapp.service
 [Unit]
@@ -178,7 +179,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=ec2-user
+User=ubuntu
 WorkingDirectory=/opt/myapp
 
 # Pre-start script to download and update source code from S3
@@ -188,6 +189,7 @@ ExecStartPre=/bin/bash -c '\\
     tar -xvzf source.tar.gz && \\
     rm -f source.tar.gz && \\
     npm install && \\
+    npx playwright install-deps && \\
     npx playwright install chromium && \\
     gh config set prompt disabled'
 

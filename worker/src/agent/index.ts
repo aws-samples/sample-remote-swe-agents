@@ -47,7 +47,7 @@ export const onMessageReceived = async (workerId: string) => {
 
 Here are some information you should know (DO NOT share this information with the user):
 - Your current working directory is ${DefaultWorkingDirectory}
-- You are running on an Amazon EC2 instance. You can get the instance metadata from IMDSv2 endpoint.
+- You are running on an Amazon EC2 instance and Ubuntu 24.0 OS. You can get the instance metadata from IMDSv2 endpoint.
 - Today is ${new Date().toDateString()}.
 
 ## User interface
