@@ -9,9 +9,15 @@ type MessageItem = {
   role: string;
   tokenCount: number;
   messageType: string;
+  slackUserId: string;
 };
 
-export const saveConversationHistory = async (workerId: string, message: string, imageS3Keys: string[] = []) => {
+export const saveConversationHistory = async (
+  workerId: string,
+  message: string,
+  slackUserId: string,
+  imageS3Keys: string[] = []
+) => {
   const content = [];
   if (message) {
     content.push({ text: message });
@@ -36,6 +42,7 @@ export const saveConversationHistory = async (workerId: string, message: string,
         role: 'user',
         tokenCount: 0,
         messageType: 'userMessage',
+        slackUserId,
       } satisfies MessageItem,
     })
   );

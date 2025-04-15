@@ -17,6 +17,7 @@ type MessageItem = {
   role: string;
   tokenCount: number;
   messageType: string;
+  slackUserId?: string;
 };
 
 export const saveConversationHistoryAtomic = async (
@@ -113,7 +114,15 @@ export const getConversationHistory = async (workerId: string) => {
     items.push(...(page.Items as any));
   }
 
-  return { items };
+  return { items, slackUserId: searchForLastSlackUserId(items) };
+};
+
+const searchForLastSlackUserId = (items: MessageItem[]) => {
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].slackUserId) {
+      return items[i].slackUserId;
+    }
+  }
 };
 
 export const middleOutFiltering = async (items: MessageItem[]) => {

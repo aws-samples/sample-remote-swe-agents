@@ -28,10 +28,9 @@ import { getPRCommentsTool, replyPRCommentTool } from './tools/github-pr-comment
 import { readMetadata } from './common/metadata';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { thinkTool } from './tools/think';
 
 export const onMessageReceived = async (workerId: string) => {
-  const { items: allItems } = await pRetry(
+  const { items: allItems, slackUserId } = await pRetry(
     async (attemptCount) => {
       const res = await getConversationHistory(workerId);
       const lastItem = res.items.at(-1);
@@ -52,22 +51,28 @@ Here are some information you should know (DO NOT share this information with th
 - Today is ${new Date().toDateString()}.
 
 ## User interface
-Your output text is sent to the user only when 1. using ${reportProgressTool.name} tool or 2. you finished using all tools and end your turn. DO NOT send duplicated messages to the user. For example, if you use ${reportProgressTool.name} tool right before ending your turn, your messages will be highly likely duplicated. In that case, please do not generate any content as the final output.
+Your output text is sent to the user only when 1. using ${reportProgressTool.name} tool or 2. you finished using all tools and end your turn. You should periodically send messages to avoid from confusing the user. 
 
-You should periodically report your progress to avoid from confusing the user. Any tool results might contain a prompt to let you know that more than 5 minutes have passed since the last time you sent a message. If you get the prompt, you should report some progress message using this tool.
+### Message Sending Patterns:
+- GOOD PATTERN: Send progress update during a long operation → Continue with more tools → End turn with final response
+- GOOD PATTERN: Use multiple tools without progress updates → End turn with comprehensive response
+- GOOD PATTERN: Send final progress update as the last action → End turn with NO additional text output
+- BAD PATTERN: Send progress update → End turn with similar message (causes duplication)
 
-- Only use ${reportProgressTool.name} during multi-step tasks that take >30 seconds to complete
-- Use this tool exclusively for progress updates during long-running operations
-- Never use ${reportProgressTool.name} for greetings, acknowledgments, or simple responses
-- Reserve this tool for sharing interim results or status updates when executing complex commands
-- For simple responses: reply directly without tools
-- For internal reasoning: use think tool
-- For progress during lengthy operations: use ${reportProgressTool.name}
+### Tool Usage Decision Flow:
+- For complex, multi-step operations (>30 seconds): Use ${reportProgressTool.name} for interim updates
+- For internal reasoning or planning: Use think tool (invisible to user)
+- For quick responses or final conclusions: Reply directly without tools at end of turn
+
+### Implementing "No Final Output":
+- If your last action was ${reportProgressTool.name}, your final response should be empty
+- This means: do not write any text after your final tool usage if that tool was ${reportProgressTool.name}
+- Example: \`<last tool call is ${reportProgressTool.name}>\` → your turn ends with no additional text
 
 ## Communication Style
 Be brief, clear, and precise. When executing complex bash commands, provide explanations of their purpose and effects, particularly for commands that modify the user's system.
 Your responses will appear in Slack messages. Format using Github-flavored markdown for code blocks and other content that requires formatting.
-Communicate with the user through text output; all non-tool text is visible to users. Use tools exclusively for task completion. Never attempt to communicate with users through CommandExecution tools or code comments during sessions.
+Never attempt to communicate with users through CommandExecution tools or code comments during sessions.
 If you must decline a request, avoid explaining restrictions or potential consequences as this can appear condescending. Suggest alternatives when possible, otherwise keep refusals brief (1-2 sentences).
 CRITICAL: Minimize token usage while maintaining effectiveness, quality and precision. Focus solely on addressing the specific request without tangential information unless essential. When possible, respond in 1-3 sentences or a concise paragraph.
 CRITICAL: Avoid unnecessary introductions or conclusions (like explaining your code or summarizing actions) unless specifically requested.
@@ -128,6 +133,8 @@ Users will primarily request software engineering assistance including bug fixes
 `;
 
   let systemPrompt = baseSystemPrompt;
+  // enable prompt cache unless DISABLE_PROMPT_CACHE is explicitly set
+  const enablePromptCache = (process.env.DISABLE_PROMPT_CACHE ?? 'false') == 'false';
 
   const tryAppendRepositoryKnowledge = async () => {
     try {
@@ -161,7 +168,7 @@ Users will primarily request software engineering assistance including bug fixes
     cloneRepositoryTool,
     commandExecutionTool,
     reportProgressTool,
-    thinkTool,
+    // thinkTool,
     fileEditTool,
     webBrowserTool,
     sendImageTool,
@@ -172,17 +179,13 @@ Users will primarily request software engineering assistance including bug fixes
     tools: [
       ...(await Promise.all(tools.map(async (tool) => ({ toolSpec: await tool.toolSpec() })))),
       ...(await getMcpToolSpecs()),
-      { cachePoint: { type: 'default' } },
+      ...(enablePromptCache ? [{ cachePoint: { type: 'default' as const } }] : []),
     ],
   };
   const forcedReportToolConfig: typeof toolConfig = {
-    tools: [
-      ...(await Promise.all(
-        [thinkTool, reportProgressTool].map(async (tool) => ({ toolSpec: await tool.toolSpec() }))
-      )),
-    ],
+    ...toolConfig,
     toolChoice: {
-      any: {},
+      tool: { name: reportProgressTool.name },
     },
   };
 
@@ -200,14 +203,13 @@ Users will primarily request software engineering assistance including bug fixes
     secondCachePoint = messages.length - 1;
     [...new Set([firstCachePoint, secondCachePoint])].forEach((cp) => {
       const message = messages[cp];
-      if (message?.content) {
+      if (message?.content && enablePromptCache) {
         message.content = [...message.content, { cachePoint: { type: 'default' } }];
       }
     });
     firstCachePoint = secondCachePoint;
 
     const forceReport = Date.now() - lastReportedTime > 300 * 1000;
-    if (lastReportedTime == 0) lastReportedTime = Date.now();
 
     const res = await pRetry(
       async () => {
@@ -216,7 +218,10 @@ Users will primarily request software engineering assistance including bug fixes
 
           const res = await bedrockConverse(['sonnet3.7'], {
             messages,
-            system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
+            system: [
+              { text: systemPrompt },
+              ...(enablePromptCache ? [{ cachePoint: { type: 'default' as const } }] : []),
+            ],
             toolConfig: forceReport ? forcedReportToolConfig : toolConfig,
           });
           return res;
@@ -346,14 +351,19 @@ Users will primarily request software engineering assistance including bug fixes
       appendedItems.push(...savedItems);
     } else {
       const finalMessage = res.output?.message;
+      const mention = slackUserId ? `<@${slackUserId}> ` : '';
       if (finalMessage?.content == null || finalMessage.content?.length == 0) {
         // It seems this happens sometimes. We can just ignore this message.
+        console.log('final message is empty. ignoring...');
+        if (mention) {
+          await sendMessage(mention);
+        }
         break;
       }
       // Save assistant message with token count
       await saveConversationHistory(workerId, finalMessage, outputTokenCount, 'assistant');
       // reasoning有効の場合、content[0]には推論結果が入る
-      await sendMessage(`${(finalMessage.content?.at(-1) as any)?.text}`);
+      await sendMessage(`${mention}${(finalMessage.content?.at(-1) as any)?.text}`);
       break;
     }
   }

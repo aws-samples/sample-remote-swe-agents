@@ -203,7 +203,7 @@ app.event('app_mention', async ({ event, client, logger }) => {
       const cloudwatchUrl = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups/log-group/${encodeURIComponent(logGroupName)}/log-events/${encodeURIComponent(logStreamName)}`;
 
       await Promise.all([
-        saveConversationHistory(workerId, message, imageKeys),
+        saveConversationHistory(workerId, message, userId, imageKeys),
         sendEvent(workerId, 'onMessageReceived'),
         lambda.send(
           new InvokeCommand({

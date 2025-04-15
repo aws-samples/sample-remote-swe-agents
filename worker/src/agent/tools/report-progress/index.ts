@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { sendMessage } from '../../../common/slack';
 
 const inputSchema = z.object({
-  message: z.string().describe('The message you want to send to the user.'),
+  thought: z.string().describe('Your thoughts on the message.'),
+  message: z
+    .string()
+    .describe('The message you want to send to the user. Set empty string to avoid sending unnecessary message.'),
 });
 
-const name = 'sendMessageToUser';
+const name = 'sendMessageToUserIfNecessary';
 
 export const reportProgressTool: ToolDefinition<z.infer<typeof inputSchema>> = {
   name,
@@ -18,7 +21,11 @@ export const reportProgressTool: ToolDefinition<z.infer<typeof inputSchema>> = {
   schema: inputSchema,
   toolSpec: async () => ({
     name,
-    description: `Send any message to the user. This is especially valuable if the message contains any information the user want to know, such as how you are solving the problem now. Without this tool, a user cannot know your progress because message is only sent when you finished using tools and end your turn.`,
+    description: `
+Send any message to the user. This is especially valuable if the message contains any information the user want to know, such as how you are solving the problem now. Without this tool, a user cannot know your progress because message is only sent when you finished using tools and end your turn.
+
+Please output your thoughts on how to compose your message to the user before actually writing the message. Remember, if you do not have anything to send or just too immature to report progress, you can just pass an empty string to the \`message\` property to skip sending a message.
+    `,
     inputSchema: {
       json: zodToJsonSchemaBody(inputSchema),
     },
