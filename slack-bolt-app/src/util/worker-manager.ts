@@ -79,8 +79,7 @@ async function createWorkerInstance(
   workerAmiParameterName: string,
   subnetId: string
 ): Promise<string> {
-
-  const imageId = await fetchWorkerAmiId(workerAmiParameterName)
+  const imageId = await fetchWorkerAmiId(workerAmiParameterName);
 
   const runInstancesCommand = new RunInstancesCommand({
     LaunchTemplate: {
