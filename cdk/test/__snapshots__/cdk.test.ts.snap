@@ -1726,6 +1726,7 @@ ExecStartPre=/bin/bash -c '\\
 ExecStart=/bin/bash -l -c 'npx tsx src/main.ts'
 Restart=always
 RestartSec=10
+TimeoutStartSec=600
 TimeoutStopSec=10s
 StandardOutput=journal
 StandardError=journal
@@ -1759,6 +1760,7 @@ Environment=BUCKET_NAME=",
                   "
 Environment=BEDROCK_AWS_ACCOUNTS=
 Environment=BEDROCK_AWS_ROLE_NAME=
+# Environment=MODEL_OVERRIDE=nova-pro
 
 [Install]
 WantedBy=multi-user.target

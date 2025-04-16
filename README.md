@@ -253,6 +253,8 @@ By default the Remote SWE uses Claude Sonnet 3.7 as the foundation model. You ca
 2. Run cdk deploy
 3. New workers now use the override model.
 
+Note that this feature is highly experimental and we generally recommend to use the default model for optimized experience.
+
 ## How it works
 
 This system utilizes a Slack Bolt application to manage user interactions and implement a scalable worker system. Here's the main workflow:

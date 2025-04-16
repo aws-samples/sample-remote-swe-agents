@@ -196,6 +196,7 @@ ExecStartPre=/bin/bash -c '\\
 ExecStart=/bin/bash -l -c 'npx tsx src/main.ts'
 Restart=always
 RestartSec=10
+TimeoutStartSec=600
 TimeoutStopSec=10s
 StandardOutput=journal
 StandardError=journal
