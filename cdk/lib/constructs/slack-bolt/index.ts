@@ -9,7 +9,7 @@ import { Construct } from 'constructs';
 import { WorkerBus } from '../worker/bus';
 import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
-import { IStringParameter } from 'aws-cdk-lib/aws-ssm';
+import { IStringParameter, StringParameter } from 'aws-cdk-lib/aws-ssm';
 
 export interface SlackBoltProps {
   signingSecretParameter: IStringParameter;
@@ -21,6 +21,7 @@ export interface SlackBoltProps {
   storageBucket: IBucket;
   adminUserIdList?: string;
   workerLogGroupName: string;
+  workerAmiId: IStringParameter;
 }
 
 export class SlackBolt extends Construct {
@@ -40,6 +41,7 @@ export class SlackBolt extends Construct {
         EVENT_HTTP_ENDPOINT: props.workerBus.httpEndpoint,
         TABLE_NAME: props.storageTable.tableName,
         BUCKET_NAME: props.storageBucket.bucketName,
+        WORKER_AMI_PARAMETER_NAME: props.workerAmiId.parameterName,
       },
       architecture: Architecture.ARM_64,
       bundling: {
@@ -54,6 +56,7 @@ export class SlackBolt extends Construct {
     props.storageTable.grantReadWriteData(asyncHandler);
     props.storageBucket.grantReadWrite(asyncHandler);
     props.workerBus.api.grantPublish(asyncHandler);
+    props.workerAmiId.grantRead(asyncHandler);
 
     const handler = new NodejsFunction(this, 'Handler', {
       entry: '../slack-bolt-app/src/lambda.ts',
