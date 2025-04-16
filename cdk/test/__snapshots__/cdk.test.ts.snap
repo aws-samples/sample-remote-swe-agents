@@ -1719,6 +1719,7 @@ ExecStartPre=/bin/bash -c '\\
     tar -xvzf source.tar.gz && \\
     rm -f source.tar.gz && \\
     npm install && \\
+    npx playwright install-deps && \\
     npx playwright install chromium && \\
     gh config set prompt disabled'
 
