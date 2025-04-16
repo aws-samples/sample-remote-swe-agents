@@ -214,6 +214,7 @@ Environment=TABLE_NAME=${props.storageTable.tableName}
 Environment=BUCKET_NAME=${props.imageBucket.bucketName}
 Environment=BEDROCK_AWS_ACCOUNTS=${props.loadBalancing?.awsAccounts.join(',') ?? ''}
 Environment=BEDROCK_AWS_ROLE_NAME=${props.loadBalancing?.roleName ?? ''}
+# Environment=MODEL_OVERRIDE=nova-pro
 
 [Install]
 WantedBy=multi-user.target

@@ -7,15 +7,54 @@ import {
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { ddb, TableName } from './ddb';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { z } from 'zod';
 
 const sts = new STSClient();
 const awsAccounts = (process.env.BEDROCK_AWS_ACCOUNTS ?? '').split(',');
 const roleName = process.env.BEDROCK_AWS_ROLE_NAME || 'bedrock-remote-swe-role';
 
-export type ModelType = 'sonnet3.5v1' | 'sonnet3.5' | 'sonnet3.7' | 'haiku3.5';
+const modelTypeSchema = z.enum(['sonnet3.5v1', 'sonnet3.5', 'sonnet3.7', 'haiku3.5', 'nova-pro']);
+type ModelType = z.infer<typeof modelTypeSchema>;
+
+const modelConfigSchema = z.object({
+  maxOutputTokens: z.number().default(4096),
+  cacheSupport: z.array(z.enum(['system', 'tool', 'message'])).default([]),
+  reasoningSupport: z.boolean().default(false),
+  toolChoiceSupport: z.array(z.enum(['any', 'auto', 'tool'])).default([]),
+});
+
+const modelConfigs: Record<ModelType, Partial<z.infer<typeof modelConfigSchema>>> = {
+  'sonnet3.5v1': {
+    maxOutputTokens: 4096,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+  },
+  'sonnet3.5': {
+    maxOutputTokens: 4096,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+  },
+  'sonnet3.7': {
+    maxOutputTokens: 8192,
+    cacheSupport: ['system', 'message', 'tool'],
+    reasoningSupport: true,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+  },
+  'haiku3.5': {
+    maxOutputTokens: 4096,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+  },
+  'nova-pro': {
+    maxOutputTokens: 5000,
+    cacheSupport: ['system'],
+    toolChoiceSupport: ['auto'],
+  },
+};
 
 export const bedrockConverse = async (modelTypes: ModelType[], input: Omit<ConverseCommandInput, 'modelId'>) => {
-  const modelType = chooseRandom(modelTypes);
+  const modelOverride = modelTypeSchema
+    .optional()
+    // empty string to undefined
+    .parse(process.env.MODEL_OVERRIDE ? process.env.MODEL_OVERRIDE : undefined);
+  const modelType = modelOverride || chooseRandom(modelTypes);
   const { client, modelId, awsRegion, account } = await getModelClient(modelType);
   console.log(`Using ${JSON.stringify({ modelId, awsRegion, account, roleName })}`);
   const command = new ConverseCommand(
@@ -27,6 +66,7 @@ export const bedrockConverse = async (modelTypes: ModelType[], input: Omit<Conve
       modelType
     )
   );
+  // console.log(JSON.stringify(command.input.toolConfig));
   const response = await client.send(command);
 
   // Get worker ID from environment variable or from options
@@ -39,10 +79,18 @@ export const bedrockConverse = async (modelTypes: ModelType[], input: Omit<Conve
 };
 
 const preProcessInput = (input: ConverseCommandInput, modelType: ModelType) => {
+  const modelConfig = modelConfigSchema.parse(modelConfigs[modelType]);
   // we cannot use JSON.parse(JSON.stringify(input)) here because input sometimes contains Buffer object for image.
   input = structuredClone(input);
+
+  if (input.toolConfig?.toolChoice) {
+    if (modelConfig.toolChoiceSupport.every((choice) => !(choice in input.toolConfig!.toolChoice!))) {
+      input.toolConfig.toolChoice = undefined;
+    }
+  }
+
   let enableReasoning = false;
-  if (modelType == 'sonnet3.7') {
+  if (modelConfig.reasoningSupport) {
     if (input.toolConfig?.toolChoice != null) {
       // toolChoice and reasoning cannot be enabled at the same time
     } else if (
@@ -71,6 +119,34 @@ const preProcessInput = (input: ConverseCommandInput, modelType: ModelType) => {
       return message;
     });
   }
+
+  input.inferenceConfig ??= { maxTokens: modelConfig.maxOutputTokens };
+
+  if (!modelConfig.cacheSupport.includes('system') && input.system) {
+    for (let i = input.system.length - 1; i >= 0; i--) {
+      if ('cachePoint' in input.system[i]) {
+        input.system.splice(i, 1);
+      }
+    }
+  }
+  if (!modelConfig.cacheSupport.includes('tool') && input.toolConfig?.tools) {
+    for (let i = input.toolConfig.tools.length - 1; i >= 0; i--) {
+      if ('cachePoint' in input.toolConfig.tools[i]) {
+        input.toolConfig.tools.splice(i, 1);
+      }
+    }
+  }
+  if (!modelConfig.cacheSupport.includes('message') && input.messages) {
+    for (const message of input.messages) {
+      const content = message.content;
+      if (!content) continue;
+      for (let i = content.length - 1; i >= 0; i--)
+        if ('cachePoint' in content[i]) {
+          content.splice(i, 1);
+        }
+    }
+  }
+
   return input;
 };
 
@@ -116,6 +192,11 @@ const chooseModelAndRegion = (modelType: ModelType) => {
     case 'haiku3.5':
       modelId = 'anthropic.claude-3-5-haiku-20241022-v1:0';
       break;
+    case 'nova-pro':
+      modelId = 'amazon.nova-pro-v1:0';
+      break;
+    default:
+      throw new Error(`Unknown model type: ${modelType}`);
   }
   modelId = `${region}.${modelId}`;
   return {

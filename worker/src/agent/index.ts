@@ -133,8 +133,6 @@ Users will primarily request software engineering assistance including bug fixes
 `;
 
   let systemPrompt = baseSystemPrompt;
-  // enable prompt cache unless DISABLE_PROMPT_CACHE is explicitly set
-  const enablePromptCache = (process.env.DISABLE_PROMPT_CACHE ?? 'false') == 'false';
 
   const tryAppendRepositoryKnowledge = async () => {
     try {
@@ -179,7 +177,7 @@ Users will primarily request software engineering assistance including bug fixes
     tools: [
       ...(await Promise.all(tools.map(async (tool) => ({ toolSpec: await tool.toolSpec() })))),
       ...(await getMcpToolSpecs()),
-      ...(enablePromptCache ? [{ cachePoint: { type: 'default' as const } }] : []),
+      { cachePoint: { type: 'default' } },
     ],
   };
   const forcedReportToolConfig: typeof toolConfig = {
@@ -203,7 +201,7 @@ Users will primarily request software engineering assistance including bug fixes
     secondCachePoint = messages.length - 1;
     [...new Set([firstCachePoint, secondCachePoint])].forEach((cp) => {
       const message = messages[cp];
-      if (message?.content && enablePromptCache) {
+      if (message?.content) {
         message.content = [...message.content, { cachePoint: { type: 'default' } }];
       }
     });
@@ -218,10 +216,7 @@ Users will primarily request software engineering assistance including bug fixes
 
           const res = await bedrockConverse(['sonnet3.7'], {
             messages,
-            system: [
-              { text: systemPrompt },
-              ...(enablePromptCache ? [{ cachePoint: { type: 'default' as const } }] : []),
-            ],
+            system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
             toolConfig: forceReport ? forcedReportToolConfig : toolConfig,
           });
           return res;
@@ -260,85 +255,83 @@ Users will primarily request software engineering assistance including bug fixes
         throw new Error('output is null');
       }
       const toolUseMessage = res.output.message;
-
-      const toolUse = toolUseMessage.content?.at(-1)?.toolUse;
-      const toolUseId = toolUse?.toolUseId;
-      if (toolUse == null || toolUseId == null) {
-        throw new Error('toolUse is null');
-      }
-      let toolResult = '';
-      let toolResultObject: ToolResultContentBlock[] | undefined = undefined;
-      try {
-        const name = toolUse.name;
-        const toolInput = toolUse.input;
-        const mcpResult = await tryExecuteMcpTool(name!, toolInput);
-        if (mcpResult.found) {
-          console.log(`Used MCP tool: ${name} ${JSON.stringify(toolInput)}`);
-          if (typeof mcpResult.content == 'string') {
-            toolResult = mcpResult.content;
-          } else {
-            toolResultObject = mcpResult.content!.map(
-              (c): { text: string } | { image: { format: string; source: { bytes: Buffer } } } => {
-                if (c.type == 'text') {
-                  return {
-                    text: c.text,
-                  };
-                } else if (c.type == 'image') {
-                  return {
-                    image: {
-                      format: c.mimeType.split('/')[1],
-                      source: { bytes: Buffer.from(c.data, 'base64') },
-                    },
-                  };
-                } else {
-                  throw new Error(`unsupported content type! ${JSON.stringify(c)}`);
+      const toolUseRequests = toolUseMessage.content?.filter((c) => 'toolUse' in c) ?? [];
+      const toolResultMessage: Message = { role: 'user', content: [] };
+      for (const request of toolUseRequests) {
+        const toolUse = request.toolUse;
+        const toolUseId = toolUse?.toolUseId;
+        if (toolUse == null || toolUseId == null) {
+          throw new Error('toolUse is null');
+        }
+        let toolResult = '';
+        let toolResultObject: ToolResultContentBlock[] | undefined = undefined;
+        try {
+          const name = toolUse.name;
+          const toolInput = toolUse.input;
+          const mcpResult = await tryExecuteMcpTool(name!, toolInput);
+          if (mcpResult.found) {
+            console.log(`Used MCP tool: ${name} ${JSON.stringify(toolInput)}`);
+            if (typeof mcpResult.content == 'string') {
+              toolResult = mcpResult.content;
+            } else {
+              toolResultObject = mcpResult.content!.map(
+                (c): { text: string } | { image: { format: string; source: { bytes: Buffer } } } => {
+                  if (c.type == 'text') {
+                    return {
+                      text: c.text,
+                    };
+                  } else if (c.type == 'image') {
+                    return {
+                      image: {
+                        format: c.mimeType.split('/')[1],
+                        source: { bytes: Buffer.from(c.data, 'base64') },
+                      },
+                    };
+                  } else {
+                    throw new Error(`unsupported content type! ${JSON.stringify(c)}`);
+                  }
                 }
-              }
-            ) as any;
-          }
-        } else {
-          // mcp tool for the tool name was not found.
-          const tool = tools.find((tool) => tool.name == name);
-          if (tool == null) {
-            throw new Error(`tool ${name} is not found`);
-          }
-          const schema = tool.schema;
-          const { success, data: input } = schema.safeParse(toolInput);
-          if (!success) {
-            throw new Error('invalid input');
+              ) as any;
+            }
+          } else {
+            // mcp tool for the tool name was not found.
+            const tool = tools.find((tool) => tool.name == name);
+            if (tool == null) {
+              throw new Error(`tool ${name} is not found`);
+            }
+            const schema = tool.schema;
+            const { success, data: input } = schema.safeParse(toolInput);
+            if (!success) {
+              throw new Error('invalid input');
+            }
+
+            console.log(`using tool: ${name} ${JSON.stringify(input)}`);
+            toolResult = await tool.handler(input);
           }
 
-          console.log(`using tool: ${name} ${JSON.stringify(input)}`);
-          toolResult = await tool.handler(input);
+          if (name == reportProgressTool.name) {
+            lastReportedTime = Date.now();
+          }
+          if (name == cloneRepositoryTool.name) {
+            // now that repository is determined, we try to update the system prompt
+            await tryAppendRepositoryKnowledge();
+          }
+        } catch (e) {
+          console.log(e);
+          toolResult = `Error occurred when using tool ${toolUse.name}: ${(e as any).message}`;
         }
 
-        if (name == reportProgressTool.name) {
-          lastReportedTime = Date.now();
-        }
-        if (name == cloneRepositoryTool.name) {
-          // now that repository is determined, we try to update the system prompt
-          await tryAppendRepositoryKnowledge();
-        }
-      } catch (e) {
-        console.log(e);
-        toolResult = `Error occurred when using tool ${toolUse.name}: ${(e as any).message}`;
-      }
-
-      const toolResultMessage: Message = {
-        role: 'user' as const,
-        content: [
-          {
-            toolResult: {
-              toolUseId,
-              content: toolResultObject ?? [
-                {
-                  text: toolResult,
-                },
-              ],
-            },
+        toolResultMessage.content!.push({
+          toolResult: {
+            toolUseId,
+            content: toolResultObject ?? [
+              {
+                text: toolResult,
+              },
+            ],
           },
-        ],
-      };
+        });
+      }
 
       // Save both tool use and tool result messages atomically to DynamoDB
       // Pass response data to save token count information
@@ -350,8 +343,8 @@ Users will primarily request software engineering assistance including bug fixes
       );
       appendedItems.push(...savedItems);
     } else {
-      const finalMessage = res.output?.message;
       const mention = slackUserId ? `<@${slackUserId}> ` : '';
+      const finalMessage = res.output?.message;
       if (finalMessage?.content == null || finalMessage.content?.length == 0) {
         // It seems this happens sometimes. We can just ignore this message.
         console.log('final message is empty. ignoring...');
@@ -363,7 +356,10 @@ Users will primarily request software engineering assistance including bug fixes
       // Save assistant message with token count
       await saveConversationHistory(workerId, finalMessage, outputTokenCount, 'assistant');
       // reasoning有効の場合、content[0]には推論結果が入る
-      await sendMessage(`${mention}${(finalMessage.content?.at(-1) as any)?.text}`);
+      const responseText = finalMessage.content?.at(-1)?.text ?? '';
+      // remove <thinking> </thinking> part with multiline support
+      const responseTextWithoutThinking = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
+      await sendMessage(`${mention}${responseTextWithoutThinking}`);
       break;
     }
   }

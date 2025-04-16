@@ -25,7 +25,7 @@ Please carefully follow all the steps below. If you encounter any issues, we're 
 - npm (version 9 or higher)
 - AWS CLI
 - AWS IAM profile with appropriate permissions
-- Bedrock Claude Sonnet 3.7 model is [enabled on](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html#getting-started-model-access) both us-east-1 and us-west-2 regions
+- Bedrock Claude Sonnet 3.7 model is [enabled on](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html#getting-started-model-access) us-west-2 regions
 - Slack Workspace
 - GitHub Account
 
@@ -238,6 +238,20 @@ As our agent can work as an MCP client, you can easily integrate it with various
 ```
 
 All the new agents can now use MCP servers as their tools.
+
+### Overriding the Foundation Model
+
+By default the Remote SWE uses Claude Sonnet 3.7 as the foundation model. You can override this configuration by the below steps:
+
+1. Edit [cdk/lib/constructs/worker/index.ts](./cdk/lib/constructs/worker/index.ts) to set the environment variable `MODEL_OVERRIDE` for the worker service. The available values are: `sonnet3.5v1, sonnet3.5, sonnet3.7, haiku3.5, and nova-pro`
+   ```diff
+   Environment=BEDROCK_AWS_ROLE_NAME=${props.loadBalancing?.roleName ?? ''}
+   + Environment=MODEL_OVERRIDE=nova-pro
+
+   [Install]
+   ```
+2. Run cdk deploy
+3. New workers now use the override model.
 
 ## How it works
 

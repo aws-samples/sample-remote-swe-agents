@@ -14,6 +14,10 @@ const inputSchema = z.object({
 });
 
 export const browseWebPage = async (input: z.infer<typeof inputSchema>) => {
+  if (process.env.MODEL_OVERRIDE) {
+    throw new Error(`You cannot use this tool with model override.`);
+  }
+
   const systemPrompt = `Browse web pages and answer the query from the user. Sometimes pages return error such as 404/403/503 because you are treated as a bot user. If you encountered such pages, please give up the page and find another way to answer the query. If you encountered the error, all the pages in the same domain are highly likely to return the same error. So you should avoid to access the domain itself.
 
 IMPORTANT:
