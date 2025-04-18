@@ -215,17 +215,31 @@ For tips on how to effectively use the agents, refer to the "Useful Tips" sectio
 ## Examples 
 
 Some of the agent sessions by Remote SWE agents:
-![example1](./docs/imgs/example1.png)
 
-[Resulting PR](https://github.com/aws-samples/remote-swe-agents/pull/17)
+<div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; margin-bottom: 20px;">
+  <div style="flex: 1; min-width: 300px;">
+    <img src="./docs/imgs/example1.png" alt="example1" style="width: 100%; border: 1px solid #ddd; border-radius: 5px;">
+    <p><a href="https://github.com/aws-samples/remote-swe-agents/pull/17">Resulting PR</a></p>
+  </div>
+  
+  <div style="flex: 1; min-width: 300px;">
+    <img src="./docs/imgs/example2.png" alt="example2" style="width: 100%; border: 1px solid #ddd; border-radius: 5px;">
+    <p><a href="https://github.com/aws-samples/trpc-nextjs-ssr-prisma-lambda/pull/16">Resulting PR#1</a>, 
+    <a href="https://github.com/aws-samples/prisma-lambda-cdk/pull/37">PR#2</a>, 
+    <a href="https://github.com/aws-samples/distributed-load-testing-with-locust-on-ecs/pull/25">PR#3</a>, ... 
+    (we instructed the agent to process multiple repos in the same session.)</p>
+  </div>
+  
+  <div style="flex: 1; min-width: 300px;">
+    <img src="./docs/imgs/example3.png" alt="example3" style="width: 100%; border: 1px solid #ddd; border-radius: 5px;">
+    <p>The agent can also input and output images as well.</p>
+  </div>
 
-![example2](./docs/imgs/example2.png)
-
-[Resulting PR#1](https://github.com/aws-samples/trpc-nextjs-ssr-prisma-lambda/pull/16), [PR#2](https://github.com/aws-samples/prisma-lambda-cdk/pull/37), [PR#3](https://github.com/aws-samples/distributed-load-testing-with-locust-on-ecs/pull/25), ... (we instructed the agent to process multiple repos in the same session.)
-
-![example3](./docs/imgs/example3.png)
-
-The agent can also input and output images as well.
+  <div style="flex: 1; min-width: 300px;">
+    <img src="./docs/imgs/example4.png" alt="example4" style="width: 100%; border: 1px solid #ddd; border-radius: 5px;">
+    <p>The agent can speak other languages than English as well. <a href="https://github.com/tmokmss/deploy-time-build/pull/32">Resulting PR</a></p>
+  </div>
+</div>
 
 ## Useful Tips
 
@@ -339,4 +353,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
-
