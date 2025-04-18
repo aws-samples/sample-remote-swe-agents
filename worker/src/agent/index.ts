@@ -28,6 +28,7 @@ import { getPRCommentsTool, replyPRCommentTool } from './tools/github-pr-comment
 import { readMetadata } from './common/metadata';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
+import { renderToolResult } from './common/prompt';
 
 export const onMessageReceived = async (workerId: string) => {
   const { items: allItems, slackUserId } = await pRetry(
@@ -180,16 +181,10 @@ Users will primarily request software engineering assistance including bug fixes
       { cachePoint: { type: 'default' } },
     ],
   };
-  const forcedReportToolConfig: typeof toolConfig = {
-    ...toolConfig,
-    toolChoice: {
-      tool: { name: reportProgressTool.name },
-    },
-  };
 
   const { items: initialItems } = await middleOutFiltering(allItems);
-  // usually cache was created with the last user message, so try to get at(-3) here.
-  // at(-1) is usually the latest user message received, which is not cached but can also be a good cache point.
+  // usually cache was created with the last user message (including toolResult), so try to get at(-3) here.
+  // at(-1) is usually the latest user message received, at(-2) is usually the last assistant output
   let firstCachePoint = initialItems.length > 2 ? initialItems.length - 3 : initialItems.length - 1;
   let secondCachePoint = 0;
   const appendedItems: typeof allItems = [];
@@ -217,7 +212,7 @@ Users will primarily request software engineering assistance including bug fixes
           const res = await bedrockConverse(['sonnet3.7'], {
             messages,
             system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }],
-            toolConfig: forceReport ? forcedReportToolConfig : toolConfig,
+            toolConfig,
           });
           return res;
         } catch (e) {
@@ -326,7 +321,7 @@ Users will primarily request software engineering assistance including bug fixes
             toolUseId,
             content: toolResultObject ?? [
               {
-                text: toolResult,
+                text: renderToolResult({ toolResult, forceReport }),
               },
             ],
           },

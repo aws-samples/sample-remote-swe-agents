@@ -13,6 +13,9 @@ export const MAX_INPUT_TOKEN = 80_000;
 type MessageItem = {
   PK: string;
   SK: string;
+  /**
+   * messsage.content in json string
+   */
   content: string;
   role: string;
   tokenCount: number;
@@ -195,13 +198,16 @@ export const noOpFiltering = async (items: MessageItem[]) => {
 
 const itemsToMessages = async (items: MessageItem[]) => {
   return (await Promise.all(
-    items.map(async (item: any) => ({
+    items.map(async (item) => ({
       role: item.role,
       content: await postProcessMessageContent(item.content),
     }))
   )) as Message[];
 };
 
+/**
+ * process message content before saving it to DB
+ */
 const preProcessMessageContent = async (content: Message['content']) => {
   content = JSON.parse(JSON.stringify(content));
 
@@ -242,6 +248,9 @@ const saveImageToLocalFs = async (imageBuffer: Buffer): Promise<string> => {
   return filePath;
 };
 
+/**
+ * process message content after getting it from DB
+ */
 const postProcessMessageContent = async (content: string) => {
   const contentArray = JSON.parse(content);
   const flattenedArray = [];
