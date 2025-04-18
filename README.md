@@ -212,6 +212,21 @@ Congratulations! Setup is now complete. You can now access all features from Sla
 
 For tips on how to effectively use the agents, refer to the "Useful Tips" section below.
 
+## Examples 
+
+Some of the agent sessions by Remote SWE agents:
+![example1](./docs/imgs/example1.png)
+
+[Resulting PR](https://github.com/aws-samples/remote-swe-agents/pull/17)
+
+![example2](./docs/imgs/example2.png)
+
+[Resulting PR#1](https://github.com/aws-samples/trpc-nextjs-ssr-prisma-lambda/pull/16), [PR#2](https://github.com/aws-samples/prisma-lambda-cdk/pull/37), [PR#3](https://github.com/aws-samples/distributed-load-testing-with-locust-on-ecs/pull/25), ... (we instructed the agent to process multiple repos in the same session.)
+
+![example3](./docs/imgs/example3.png)
+
+The agent can also input and output images as well.
+
 ## Useful Tips
 
 ### Prompting Best Practices
