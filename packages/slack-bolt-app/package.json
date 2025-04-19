@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/local.ts",
     "build": "tsc",
+    "bundle": "esbuild src/lambda.ts src/async-handler.ts --bundle --outdir=dist --platform=node --charset=utf8",
     "format": "prettier --write './**/*.ts'",
     "format:check": "prettier --check './**/*.ts'",
     "test": "echo \"Error: no test specified\" && exit 1"

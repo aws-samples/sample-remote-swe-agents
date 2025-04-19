@@ -63,7 +63,8 @@ export class Worker extends Construct {
     new BucketDeployment(this, 'SourceDeployment', {
       destinationBucket: sourceBucket,
       sources: [
-        Source.asset(join('..', 'worker'), {
+        Source.asset(join('..', 'packages', 'worker', 'dist'), {
+          exclude: [],
           bundling: {
             command: [
               'sh',
@@ -188,12 +189,11 @@ ExecStartPre=/bin/bash -c '\\
     aws s3 cp s3://${sourceBucket.bucketName}/source/source.tar.gz ./source.tar.gz && \\
     tar -xvzf source.tar.gz && \\
     rm -f source.tar.gz && \\
-    npm install && \\
     npx playwright install-deps && \\
     npx playwright install chromium && \\
     gh config set prompt disabled'
 
-ExecStart=/bin/bash -l -c 'npx tsx src/main.ts'
+ExecStart=/bin/bash -l -c 'node main.js'
 Restart=always
 RestartSec=10
 TimeoutStartSec=600

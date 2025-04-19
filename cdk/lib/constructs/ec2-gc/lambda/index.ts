@@ -7,7 +7,7 @@ const expirationInDays = parseInt(process.env.EXPIRATION_IN_DAYS ?? '2');
 export const handler = async () => {
   const now = new Date();
 
-  // インスタンスを検索するためのフィルター条件
+  // Filter conditions to search for candidate instances
   const describeParams = {
     Filters: [
       { Name: 'tag-key', Values: ['RemoteSweWorkerId'] },
@@ -21,7 +21,7 @@ export const handler = async () => {
 
     const instancesForTermination = response.Reservations?.flatMap((reservation) => reservation.Instances || [])
       .filter((instance) => {
-        // 2日以上経過したインスタンスを特定
+        // Extract instances that is started more than a day ago
         const launchTime = instance.LaunchTime;
         if (!launchTime) return false;
 
