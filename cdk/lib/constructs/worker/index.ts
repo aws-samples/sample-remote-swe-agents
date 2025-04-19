@@ -63,8 +63,8 @@ export class Worker extends Construct {
     new BucketDeployment(this, 'SourceDeployment', {
       destinationBucket: sourceBucket,
       sources: [
-        Source.asset(join('..', 'packages', 'worker', 'dist'), {
-          exclude: [],
+         // specify a dummy directory. All the input files are already in the image.
+        Source.asset(join('..', 'resources'), {
           bundling: {
             command: [
               'sh',
@@ -72,12 +72,12 @@ export class Worker extends Construct {
               [
                 //
                 'cd /asset-input',
-                "tar --exclude='./node_modules' -zcf source.tar.gz ./*",
+                "tar -zcf source.tar.gz -C /build/ .",
                 'mkdir -p /asset-output/source',
                 'mv source.tar.gz /asset-output/source',
               ].join('&&'),
             ],
-            image: DockerImage.fromRegistry('alpine'),
+            image: DockerImage.fromBuild('..', {file: join('docker','worker.Dockerfile')}),
           },
         }),
       ],
@@ -189,11 +189,13 @@ ExecStartPre=/bin/bash -c '\\
     aws s3 cp s3://${sourceBucket.bucketName}/source/source.tar.gz ./source.tar.gz && \\
     tar -xvzf source.tar.gz && \\
     rm -f source.tar.gz && \\
+    npm ci && \\
+    npm run build -w packages/common && \\
     npx playwright install-deps && \\
     npx playwright install chromium && \\
     gh config set prompt disabled'
 
-ExecStart=/bin/bash -l -c 'node main.js'
+ExecStart=/bin/bash -l -c 'cd packages/worker && npx tsx src/main.js'
 Restart=always
 RestartSec=10
 TimeoutStartSec=600

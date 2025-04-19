@@ -1,6 +1,5 @@
 FROM public.ecr.aws/lambda/nodejs:22 AS builder
 WORKDIR /build
-ENV a=1
 COPY package*.json ./
 COPY packages/common/package*.json ./packages/common/
 COPY packages/slack-bolt-app/package*.json ./packages/slack-bolt-app/
