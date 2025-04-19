@@ -8,6 +8,8 @@ import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { ddb, TableName } from '@remote-swe-agents/common';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
+import { writeFileSync } from 'fs';
+import { WorkerId } from '../../common/constants';
 
 const sts = new STSClient();
 const awsAccounts = (process.env.BEDROCK_AWS_ACCOUNTS ?? '').split(',');
@@ -66,14 +68,10 @@ export const bedrockConverse = async (modelTypes: ModelType[], input: Omit<Conve
       modelType
     )
   );
-  // console.log(JSON.stringify(command.input.toolConfig));
   const response = await client.send(command);
 
-  // Get worker ID from environment variable or from options
-  const workerId = process.env.WORKER_ID || 'default-worker';
-
   // Track token usage for analytics
-  await trackTokenUsage(workerId, modelId, response);
+  await trackTokenUsage(WorkerId, modelId, response);
 
   return response;
 };
@@ -83,12 +81,14 @@ const preProcessInput = (input: ConverseCommandInput, modelType: ModelType) => {
   // we cannot use JSON.parse(JSON.stringify(input)) here because input sometimes contains Buffer object for image.
   input = structuredClone(input);
 
+  // remove toolChoice if not supported
   if (input.toolConfig?.toolChoice) {
     if (modelConfig.toolChoiceSupport.every((choice) => !(choice in input.toolConfig!.toolChoice!))) {
       input.toolConfig.toolChoice = undefined;
     }
   }
 
+  // enable or disable reasoning
   let enableReasoning = false;
   if (modelConfig.reasoningSupport) {
     if (input.toolConfig?.toolChoice != null) {
@@ -120,8 +120,10 @@ const preProcessInput = (input: ConverseCommandInput, modelType: ModelType) => {
     });
   }
 
+  // set maximum number of output tokens
   input.inferenceConfig ??= { maxTokens: modelConfig.maxOutputTokens };
 
+  // remove cachePoints if not supported
   if (!modelConfig.cacheSupport.includes('system') && input.system) {
     for (let i = input.system.length - 1; i >= 0; i--) {
       if ('cachePoint' in input.system[i]) {

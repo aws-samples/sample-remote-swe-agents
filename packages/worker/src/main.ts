@@ -4,10 +4,12 @@ import { sendMessage } from './common/slack';
 import { onMessageReceived, resume } from './agent';
 import { setKillTimer } from './common/kill-timer';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+import './common/signal-handler';
+import { WorkerId } from './common/constants';
 
 Object.assign(global, { WebSocket: require('ws') });
 
-const workerId = process.env.WORKER_ID!;
+const workerId = WorkerId;
 const eventHttpEndpoint = process.env.EVENT_HTTP_ENDPOINT!;
 const awsRegion = process.env.AWS_REGION!;
 

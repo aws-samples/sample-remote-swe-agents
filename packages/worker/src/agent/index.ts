@@ -19,7 +19,6 @@ import { ciTool } from './tools/ci';
 import { setKillTimer } from '../common/kill-timer';
 import { reportProgressTool } from './tools/report-progress';
 import { fileEditTool } from './tools/editor';
-import { webBrowserTool } from './tools/browser';
 import { bedrockConverse } from './common/bedrock';
 import { cloneRepositoryTool } from './tools/repo';
 import { getMcpToolSpecs, tryExecuteMcpTool } from './mcp';
@@ -269,8 +268,8 @@ Users will primarily request software engineering assistance including bug fixes
             if (typeof mcpResult.content == 'string') {
               toolResult = mcpResult.content;
             } else {
-              toolResultObject = mcpResult.content!.map(
-                (c): { text: string } | { image: { format: string; source: { bytes: Buffer } } } => {
+              toolResultObject = await Promise.all(mcpResult.content!.map(
+                async (c): Promise<{ text: string } | { image: { format: string; source: { bytes: any } } }> => {
                   if (c.type == 'text') {
                     return {
                       text: c.text,
@@ -286,7 +285,7 @@ Users will primarily request software engineering assistance including bug fixes
                     throw new Error(`unsupported content type! ${JSON.stringify(c)}`);
                   }
                 }
-              ) as any;
+              )) as any;
             }
           } else {
             // mcp tool for the tool name was not found.

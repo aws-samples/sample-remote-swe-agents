@@ -1,11 +1,12 @@
 import { Message } from '@aws-sdk/client-bedrock-runtime';
 import { PutCommand, UpdateCommand, paginateQuery, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { getBytesFromKey } from '@remote-swe-agents/common';
+import { getBytesFromKey, writeBytesToKey } from '@remote-swe-agents/common';
 import sharp from 'sharp';
 import { ddb, TableName } from '@remote-swe-agents/common';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
+import { WorkerId } from '../../common/constants';
 
 // Maximum input token count before applying middle-out strategy
 export const MAX_INPUT_TOKEN = 80_000;
@@ -35,16 +36,16 @@ export const saveConversationHistoryAtomic = async (
     SK: `${String(now).padStart(15, '0')}`,
     content: await preProcessMessageContent(toolUseMessage.content),
     role: toolUseMessage.role ?? 'unknown',
-    tokenCount: outputTokenCount, // Will be updated later when we get token information
+    tokenCount: outputTokenCount,
     messageType: 'toolUse',
   };
 
   const toolResultItem: MessageItem = {
     PK: `message-${workerId}`,
-    SK: `${String(now + 1).padStart(15, '0')}`,
+    SK: `${String(now + 1).padStart(15, '0')}`, // just add 1 to minimize the possibility of SK conflict
     content: await preProcessMessageContent(toolResultMessage.content),
     role: toolResultMessage.role ?? 'unknown',
-    tokenCount: 0,
+    tokenCount: 0, // Will be updated later when we get token information
     messageType: 'toolResult',
   };
 
@@ -209,14 +210,30 @@ const itemsToMessages = async (items: MessageItem[]) => {
  * process message content before saving it to DB
  */
 const preProcessMessageContent = async (content: Message['content']) => {
-  content = JSON.parse(JSON.stringify(content));
+  const workerId = WorkerId;
+  content = structuredClone(content) ?? [];
 
-  // modify content before saving
+  for (const c of content) {
+    // store image in toolResult content to S3
+    if (c.toolResult?.content) {
+      for (const cc of c.toolResult.content) {
+        if (cc.image?.source?.bytes != null) {
+          const bytes = cc.image.source.bytes;
+          const hash = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+          const s3Key = `${workerId}/${hash}.${cc.image.format}`;
+          await writeBytesToKey(s3Key, bytes);
+          const newContent = cc.image.source as any;
+          delete newContent['bytes'];
+          newContent.s3Key = s3Key;
+        }
+      }
+    }
+  }
 
   return JSON.stringify(content);
 };
 
-const imageCache: Record<string, { data: Buffer; localPath: string }> = {};
+const imageCache: Record<string, { data: Uint8Array; localPath: string; format: string }> = {};
 let imageSeqNo = 0;
 
 const ensureImagesDirectory = () => {
@@ -227,7 +244,7 @@ const ensureImagesDirectory = () => {
   return imagesDir;
 };
 
-const saveImageToLocalFs = async (imageBuffer: Buffer): Promise<string> => {
+const saveImageToLocalFs = async (imageBuffer: Uint8Array): Promise<string> => {
   const imagesDir = ensureImagesDirectory();
 
   // Convert webp to jpeg for better compatibility with CLI tools
@@ -256,36 +273,45 @@ const postProcessMessageContent = async (content: string) => {
   const flattenedArray = [];
 
   for (const c of contentArray) {
-    if (!('image' in c)) {
-      flattenedArray.push(c);
-      continue;
-    }
+    if (typeof c.image?.source?.s3Key == 'string') {
+      const s3Key = c.image.source.s3Key as string;
+      let imageBuffer: Uint8Array;
+      let localPath: string;
+      let imageFormat: string;
 
-    const s3Key = c.image.source.s3Key;
-    let imageBuffer: Buffer;
-    let localPath: string;
+      if (s3Key in imageCache) {
+        imageBuffer = imageCache[s3Key].data;
+        localPath = imageCache[s3Key].localPath;
+        imageFormat = imageCache[s3Key].format;
+      } else if (['png', 'jpeg', 'gif', 'webp'].some((ext) => s3Key.endsWith(ext))) {
+        imageBuffer = await getBytesFromKey(s3Key);
+        localPath = s3Key;
+        imageFormat = s3Key.split('.').pop()!;
+      } else {
+        const file = await getBytesFromKey(s3Key);
+        imageBuffer = await sharp(file).webp({ lossless: false, quality: 80 }).toBuffer();
+        localPath = await saveImageToLocalFs(imageBuffer);
+        imageFormat = 'webp';
+      }
+      imageCache[s3Key] = { data: imageBuffer, localPath, format: imageFormat };
 
-    if (s3Key in imageCache) {
-      imageBuffer = imageCache[s3Key].data;
-      localPath = imageCache[s3Key].localPath;
-    } else {
-      const file = await getBytesFromKey(s3Key);
-      imageBuffer = await sharp(file).webp({ lossless: false, quality: 80 }).toBuffer();
-      localPath = await saveImageToLocalFs(imageBuffer);
-      imageCache[s3Key] = { data: imageBuffer, localPath };
-    }
-
-    flattenedArray.push({
-      image: {
-        format: 'webp',
-        source: {
-          bytes: imageBuffer,
+      flattenedArray.push({
+        image: {
+          format: imageFormat,
+          source: {
+            bytes: imageBuffer,
+          },
         },
-      },
-    });
-    flattenedArray.push({
-      text: `the image is stored locally on ${localPath}`,
-    });
+      });
+      flattenedArray.push({
+        text: `the image is stored locally on ${localPath}`,
+      });
+    } else if (c.toolResult?.content != null) {
+      c.toolResult.content = await postProcessMessageContent(JSON.stringify(c.toolResult.content));
+      flattenedArray.push(c);
+    } else {
+      flattenedArray.push(c);
+    }
   }
 
   return flattenedArray;

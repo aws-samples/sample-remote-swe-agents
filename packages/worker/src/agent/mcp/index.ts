@@ -54,3 +54,11 @@ export const tryExecuteMcpTool = async (toolName: string, input: any) => {
   const res = await client.client.callTool(toolName, input);
   return { found: true, content: res };
 };
+
+export const closeMcpServers = async () => {
+  await Promise.all(
+    clients.map(async (client) => {
+      await client.client.cleanup();
+    })
+  );
+};

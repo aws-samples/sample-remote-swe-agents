@@ -1,29 +1,31 @@
 import { createInterface } from 'readline';
 import { onMessageReceived } from './agent';
+import './common/signal-handler';
 
-const workerId = process.env.WORKER_ID ?? randomBytes(10).toString('hex');
-process.env.WORKER_ID = workerId;
 process.env.DISABLE_SLACK = 'true';
 
 const rl = createInterface({
   input: process.stdin,
   output: process.stdout,
 });
+const workerId = WorkerId;
 
 import { saveConversationHistory } from './agent/common/messages';
-import { randomBytes } from 'crypto';
+import { WorkerId } from './common/constants';
 
 async function processInput(input: string) {
   try {
-    await saveConversationHistory(
-      workerId,
-      {
-        role: 'user',
-        content: [{ text: input }],
-      },
-      0,
-      'userMessage'
-    );
+    if (input) {
+      await saveConversationHistory(
+        workerId,
+        {
+          role: 'user',
+          content: [{ text: input }],
+        },
+        0,
+        'userMessage'
+      );
+    }
     await onMessageReceived(workerId);
   } catch (error) {
     console.error('An error occurred:', error);
