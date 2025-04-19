@@ -3,7 +3,7 @@ import { CfnStage, HttpApi } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Architecture, Code, DockerImageCode, DockerImageFunction, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 import { WorkerBus } from '../worker/bus';
@@ -11,6 +11,7 @@ import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { IStringParameter } from 'aws-cdk-lib/aws-ssm';
 import { join } from 'path';
+import { readFileSync } from 'fs';
 
 export interface SlackBoltProps {
   signingSecretParameter: IStringParameter;
@@ -29,10 +30,12 @@ export class SlackBolt extends Construct {
     super(scope, id);
 
     const { botTokenParameter, signingSecretParameter } = props;
-    const asyncHandler = new Function(this, 'AsyncHandler', {
-      runtime: Runtime.NODEJS_20_X,
-      code: Code.fromAsset(join('..', 'packages', 'slack-bolt-app', 'dist')),
-      handler: 'async-handler.handler',
+    const asyncHandler = new DockerImageFunction(this, 'AsyncHandler', {
+      code: DockerImageCode.fromImageAsset('..', {
+        file: join('docker', 'slack-bolt-app.Dockerfile'),
+        cmd: ['async-handler.handler'],
+        exclude: readFileSync(join('..', 'docker', 'slack-bolt-app.Dockerfile.dockerignore')).toString().split('\n'),
+      }),
       timeout: Duration.minutes(10),
       environment: {
         LAUNCH_TEMPLATE_ID: props.launchTemplateId,
@@ -48,10 +51,11 @@ export class SlackBolt extends Construct {
     props.storageBucket.grantReadWrite(asyncHandler);
     props.workerBus.api.grantPublish(asyncHandler);
 
-    const handler = new Function(this, 'Handler', {
-      runtime: Runtime.NODEJS_20_X,
-      code: Code.fromAsset(join('..', 'packages', 'slack-bolt-app', 'dist')),
-      handler: 'lambda.handler',
+    const handler = new DockerImageFunction(this, 'Handler', {
+      code: DockerImageCode.fromImageAsset('..', {
+        file: join('docker', 'slack-bolt-app.Dockerfile'),
+        exclude: readFileSync(join('..', 'docker', 'slack-bolt-app.Dockerfile.dockerignore')).toString().split('\n'),
+      }),
       timeout: Duration.seconds(29),
       environment: {
         SIGNING_SECRET: signingSecretParameter.stringValue,

@@ -1,0 +1,8 @@
+cdk
+packages/worker
+docs
+node_modules
+.github
+.git
+resources
+dist
