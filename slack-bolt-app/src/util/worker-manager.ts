@@ -1,8 +1,11 @@
 import { EC2Client, DescribeInstancesCommand, RunInstancesCommand, StartInstancesCommand } from '@aws-sdk/client-ec2';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
 const LaunchTemplateId = process.env.LAUNCH_TEMPLATE_ID!;
+const WorkerAmiParameterName = process.env.WORKER_AMI_PARAMETER_NAME ?? '';
 const SubnetIdList = process.env.SUBNET_ID_LIST!;
 const ec2Client = new EC2Client({});
+const ssmClient = new SSMClient({});
 
 export async function findStoppedWorkerInstance(workerId: string) {
   return findWorkerInstanceWithStatus(workerId, ['running', 'stopped']);
@@ -54,18 +57,36 @@ async function restartWorkerInstance(instanceId: string) {
   }
 }
 
+async function fetchWorkerAmiId(workerAmiParameterName: string): Promise<string | undefined> {
+  try {
+    const result = await ssmClient.send(
+      new GetParameterCommand({
+        Name: workerAmiParameterName,
+      })
+    );
+    return result.Parameter?.Value;
+  } catch (e) {
+    console.error(e);
+    throw new Error('Failed to get Worker AMI ID');
+  }
+}
+
 async function createWorkerInstance(
   workerId: string,
   slackChannelId: string,
   slackThreadTs: string,
   launchTemplateId: string,
+  workerAmiParameterName: string,
   subnetId: string
 ): Promise<string> {
+  const imageId = await fetchWorkerAmiId(workerAmiParameterName);
+
   const runInstancesCommand = new RunInstancesCommand({
     LaunchTemplate: {
       LaunchTemplateId: launchTemplateId,
       Version: '$Latest',
     },
+    ImageId: imageId,
     MinCount: 1,
     MaxCount: 1,
     SubnetId: subnetId,
@@ -123,6 +144,13 @@ export async function getOrCreateWorkerInstance(
   // TODO: choose subnet randomly
   const subnetId = SubnetIdList.split(',')[0];
   // If no instance exists, create a new one
-  const instanceId = await createWorkerInstance(workerId, slackChannelId, slackThreadTs, LaunchTemplateId, subnetId);
+  const instanceId = await createWorkerInstance(
+    workerId,
+    slackChannelId,
+    slackThreadTs,
+    LaunchTemplateId,
+    WorkerAmiParameterName,
+    subnetId
+  );
   return { instanceId, oldStatus: 'terminated' };
 }

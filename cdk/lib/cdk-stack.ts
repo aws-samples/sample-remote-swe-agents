@@ -28,6 +28,7 @@ export interface MainStackProps extends cdk.StackProps {
     awsAccounts: string[];
     roleName: string;
   };
+  workerAmiParameterName: string;
 }
 
 export class MainStack extends cdk.Stack {
@@ -41,6 +42,11 @@ export class MainStack extends cdk.Stack {
 
     const signingSecret = StringParameter.fromStringParameterAttributes(this, 'SlackSigningSecret', {
       parameterName: props.slack.signingSecretParameterName,
+      forceDynamicReference: true,
+    });
+
+    const workerAmiId = StringParameter.fromStringParameterAttributes(this, 'WorkerAmiId', {
+      parameterName: props.workerAmiParameterName,
       forceDynamicReference: true,
     });
 
@@ -104,6 +110,7 @@ export class MainStack extends cdk.Stack {
       storageBucket: storage.bucket,
       adminUserIdList: props.slack.adminUserIdList,
       workerLogGroupName: worker.logGroup.logGroupName,
+      workerAmiId,
     });
 
     new EC2GarbageCollector(this, 'EC2GarbageCollector');

@@ -2,15 +2,18 @@
 import * as cdk from 'aws-cdk-lib';
 import { MainStack, MainStackProps } from '../lib/cdk-stack';
 import { AwsSolutionsChecks } from 'cdk-nag';
+import { WorkerImageBuilderStack } from '../lib/worker-image-builder';
 
 const app = new cdk.App();
 
 const targetEnv = process.env.TARGET_ENV ?? 'Sandbox';
+const workerAmiParameterName = '/remote-swe/worker/ami-id';
 const props: MainStackProps = {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
+  workerAmiParameterName,
   slack: {
     botTokenParameterName: '/remote-swe/slack/bot-token',
     signingSecretParameterName: '/remote-swe/slack/signing-secret',
@@ -41,3 +44,7 @@ new MainStack(app, `RemoteSweStack-${targetEnv}`, {
   ...props,
 });
 // cdk.Aspects.of(app).add(new AwsSolutionsChecks());
+
+new WorkerImageBuilderStack(app, `WorkerImageBuilderStack-${targetEnv}`, {
+  workerAmiParameterName,
+});
