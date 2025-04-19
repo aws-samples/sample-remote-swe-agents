@@ -119,9 +119,12 @@ export AWS_REGION=${Stack.of(this).region}
 
 # Install Node.js https://github.com/nodesource/distributions
 curl -fsSL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-bash nodesource_setup.sh
+while true; do
+  # apt update inside the script sometimes fails
+  bash nodesource_setup.sh && break
+done
 
-apt install -y nodejs docker.io python3-pip
+apt-get -o DPkg::Lock::Timeout=-1 install -y nodejs docker.io python3-pip
 ln -s -f /usr/bin/pip3 /usr/bin/pip
 ln -s -f /usr/bin/python3 /usr/bin/pip
 
@@ -138,8 +141,8 @@ curl https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh
   && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
   && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-  && sudo apt update \
-  && sudo apt install gh -y
+  && sudo apt-get -o DPkg::Lock::Timeout=-1 update \
+  && sudo apt-get -o DPkg::Lock::Timeout=-1 install gh -y
 
 # Configure Git user for ubuntu
 sudo -u ubuntu bash -c 'git config --global user.name "remote-swe-app[bot]"'
