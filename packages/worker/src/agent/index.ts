@@ -169,7 +169,7 @@ Users will primarily request software engineering assistance including bug fixes
     reportProgressTool,
     // thinkTool,
     fileEditTool,
-    webBrowserTool,
+    // webBrowserTool,
     sendImageTool,
     getPRCommentsTool,
     replyPRCommentTool,

@@ -13,6 +13,29 @@ This is an example implementation of a fully autonomous software development AI 
 * Efficient token usage with prompt cache and middle-out strategy
 * Reads knowledge from your preferred formats (.clinerules, CLAUDE.md, etc.)
 * Can work on OSS forked repositories!
+* Monorepo structure for code sharing between components
+
+## Project Structure
+
+This project is organized as a monorepo using npm workspaces:
+
+```
+remote-swe-agents/
+├── packages/
+│   ├── common/         # Shared code between slack-bolt-app and worker
+│   ├── slack-bolt-app/ # Slack Bolt application
+│   └── worker/         # Worker service
+├── cdk/                # AWS CDK infrastructure code
+└── docs/               # Documentation
+```
+
+### Shared Code
+
+The `packages/common` directory contains shared code that is used by both the slack-bolt-app and worker packages. This includes:
+
+- AWS service clients (S3, DynamoDB)
+- Slack utilities
+- Other shared functionality
 
 ## Examples 
 

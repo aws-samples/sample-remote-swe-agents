@@ -20,6 +20,7 @@
     "@aws-sdk/credential-provider-node": "^3.750.0",
     "@aws-sdk/lib-dynamodb": "^3.751.0",
     "@aws-sdk/s3-request-presigner": "^3.758.0",
+    "@remote-swe-agents/common": "file:../common",
     "@slack/bolt": "^4.0.0",
     "@types/aws-lambda": "^8.10.147"
   },

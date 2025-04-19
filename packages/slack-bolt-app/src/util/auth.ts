@@ -1,5 +1,5 @@
 import { BatchWriteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, TableName } from '../common/ddb';
+import { ddb, TableName } from '@remote-swe-agents/common';
 
 // We cannot use email to refer to a user because user:read scope is forbidden.
 // Instead, we use userId directly.

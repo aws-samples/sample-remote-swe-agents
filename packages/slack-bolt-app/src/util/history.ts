@@ -1,5 +1,5 @@
 import { PutCommand, QueryCommand, paginateQuery } from '@aws-sdk/lib-dynamodb';
-import { ddb, TableName } from '../common/ddb';
+import { ddb, TableName } from '@remote-swe-agents/common';
 import { Message } from '@aws-sdk/client-bedrock-runtime';
 
 type MessageItem = {

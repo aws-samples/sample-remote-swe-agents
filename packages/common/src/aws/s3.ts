@@ -1,7 +1,7 @@
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
-const s3 = new S3Client();
-const BucketName = process.env.BUCKET_NAME!;
+export const s3 = new S3Client();
+export const BucketName = process.env.BUCKET_NAME!;
 
 export const getBytesFromKey = async (key: string) => {
   const { Body } = await s3.send(

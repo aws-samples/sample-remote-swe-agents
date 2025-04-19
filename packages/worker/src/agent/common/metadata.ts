@@ -1,5 +1,5 @@
 import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, TableName } from './ddb';
+import { ddb, TableName } from '@remote-swe-agents/common';
 
 /**
  * Write metadata to DynamoDB.

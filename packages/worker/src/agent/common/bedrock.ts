@@ -5,7 +5,7 @@ import {
   ConverseResponse,
 } from '@aws-sdk/client-bedrock-runtime';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
-import { ddb, TableName } from './ddb';
+import { ddb, TableName } from '@remote-swe-agents/common';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 
