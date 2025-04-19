@@ -285,7 +285,7 @@ const postProcessMessageContent = async (content: string) => {
         imageFormat = imageCache[s3Key].format;
       } else if (['png', 'jpeg', 'gif', 'webp'].some((ext) => s3Key.endsWith(ext))) {
         imageBuffer = await getBytesFromKey(s3Key);
-        localPath = s3Key;
+        localPath = await saveImageToLocalFs(imageBuffer);;
         imageFormat = s3Key.split('.').pop()!;
       } else {
         const file = await getBytesFromKey(s3Key);
